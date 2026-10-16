@@ -65,7 +65,10 @@ def _update_non_cuda_wheel_index(
 
     for path in sorted(pathlib.Path("python/sglang/kernels/aot/dist").glob("*.whl")):
         # Skip the wheel if not for this backend
-        if re.search(f"{backend}", path.name) is None:
+        if version is not None:
+            if f"+{backend}{version}-" not in path.name:
+                continue
+        elif re.search(f"{backend}", path.name) is None:
             continue
         with open(path, "rb") as f:
             sha256 = hashlib.sha256(f.read()).hexdigest()
