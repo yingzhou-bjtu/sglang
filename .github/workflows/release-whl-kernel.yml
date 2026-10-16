@@ -19,7 +19,6 @@ on:
           - 'rocm720'
           - 'rocm1000'
           - 'musa43'
-          - 'musa53'
       tag_name:
         description: "Version number, must be in the form of vX.Y.Z (e.g. v0.4.0)"
         type: string
@@ -325,8 +324,6 @@ jobs:
       github.repository == 'sgl-project/sglang' &&
       (github.event_name == 'push' || github.event.inputs.target == 'all' || github.event.inputs.target == 'musa43')
     runs-on: kernel-build-node-musa
-    env:
-      SGLANG_MUSA_CXX_STANDARD: c++17
     strategy:
       matrix:
         python-version: ["3.10"]
@@ -373,21 +370,18 @@ jobs:
           name: wheel-python${{ matrix.python-version }}-musa${{ matrix.musa-version }}
           path: python/sglang/kernels/aot/dist/*
 
-  release-musa:
-    needs: [build-musa43, build-musa53]
-    if: ${{ !cancelled() && (needs.build-musa43.result == 'success' || needs.build-musa53.result == 'success') }}
+  release-musa43:
+    needs: build-musa43
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.pr_number && format('refs/pull/{0}/head', inputs.pr_number) || '' }}
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: python/sglang/kernels/aot/dist/
           merge-multiple: true
-          pattern: wheel-*musa*
+          pattern: wheel-*
 
       - name: Set tag name
         id: set_tag_name
@@ -405,7 +399,8 @@ jobs:
           tag_name: ${{ steps.set_tag_name.outputs.tag_name }}
           repository: sgl-project/whl
           token: ${{ secrets.GH_PAT_FOR_WHL_RELEASE }}
-          files: python/sglang/kernels/aot/dist/*+musa*-*.whl
+          files: |
+            python/sglang/kernels/aot/dist/*
 
       - name: Clone wheel index
         run: git clone https://oauth2:${WHL_TOKEN}@github.com/sgl-project/whl.git sgl-whl
@@ -413,12 +408,7 @@ jobs:
           WHL_TOKEN: ${{ secrets.GH_PAT_FOR_WHL_RELEASE }}
 
       - name: Update wheel index
-        run: |
-          for version in 43 53; do
-            if compgen -G "python/sglang/kernels/aot/dist/*+musa${version}-*.whl" > /dev/null; then
-              python3 scripts/update_kernel_whl_index.py --musa "$version"
-            fi
-          done
+        run: python3 scripts/update_kernel_whl_index.py --musa 43
 
       - name: Push wheel index
         run: |
@@ -428,38 +418,3 @@ jobs:
           git add -A
           git commit -m "update whl index"
           git push
-
-  build-musa53:
-    if: |
-      github.repository == 'sgl-project/sglang' &&
-      (github.event_name == 'push' || inputs.target == 'all' || inputs.target == 'musa53')
-    runs-on: kernel-build-node-musa
-    env:
-      MUSA53_BUILD_IMAGE: ${{ vars.MUSA53_BUILD_IMAGE }}
-    steps:
-      - name: Check build image configuration
-        run: test -n "$MUSA53_BUILD_IMAGE"
-
-      - name: Clean workspace (remove root-owned files from prior runs)
-        run: |
-          docker run --rm -v "${{ github.workspace }}:/workspace" alpine:3 \
-            sh -c 'rm -rf /workspace/..?* /workspace/.[!.]* /workspace/*' || true
-
-      - uses: actions/checkout@v4
-        with:
-          submodules: "recursive"
-          ref: ${{ inputs.pr_number && format('refs/pull/{0}/head', inputs.pr_number) || '' }}
-
-      - name: Build wheels
-        run: |
-          docker run --rm \
-            --name "sglang-musa53-2-lzyzl-2-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-            -v "${{ github.workspace }}:/workspace" -w /workspace \
-            "$MUSA53_BUILD_IMAGE" bash scripts/ci/musa/build_musa53_wheel.sh
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: wheel-musa53
-          path: python/sglang/kernels/aot/dist/*+musa53-*.whl
-          if-no-files-found: error
