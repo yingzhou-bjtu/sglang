@@ -33,11 +33,7 @@
 #include <type_traits>
 #include <utility>
 
-#ifdef __CUDACC__
-#include <sgl_kernel/utils.cuh>
-#elif defined(__HIPCC__)
-#include <sgl_kernel/utils.cuh>
-#elif defined(USE_MUSA)
+#if defined(__CUDACC__) || defined(__HIPCC__) || defined(USE_MUSA)
 #include <sgl_kernel/utils.cuh>
 #endif
 
@@ -74,7 +70,7 @@ struct DLDataTypeTrait<T> {
       .code = DLDataTypeCode::kDLFloat, .bits = static_cast<std::uint8_t>(sizeof(T) * 8), .lanes = 1};
 };
 
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || (defined(USE_MUSA) && !defined(__HIPCC__))
 template <>
 struct DLDataTypeTrait<fp16_t> {
   inline static constexpr DLDataType value = {.code = DLDataTypeCode::kDLFloat, .bits = 16, .lanes = 1};
@@ -95,19 +91,6 @@ struct DLDataTypeTrait<fp16_t> {
 template <>
 struct DLDataTypeTrait<bf16_t> {
   inline static constexpr DLDataType value = {.code = DLDataTypeCode::kDLBfloat, .bits = 16, .lanes = 1};
-};
-#elif defined(USE_MUSA)
-template <>
-struct DLDataTypeTrait<fp16_t> {
-  inline static constexpr DLDataType value = {.code = DLDataTypeCode::kDLFloat, .bits = 16, .lanes = 1};
-};
-template <>
-struct DLDataTypeTrait<bf16_t> {
-  inline static constexpr DLDataType value = {.code = DLDataTypeCode::kDLBfloat, .bits = 16, .lanes = 1};
-};
-template <>
-struct DLDataTypeTrait<fp8_e4m3_t> {
-  inline static constexpr DLDataType value = {.code = DLDataTypeCode::kDLFloat8_e4m3fn, .bits = 8, .lanes = 1};
 };
 #endif
 

@@ -91,7 +91,12 @@ def device_compiler_path() -> str:
     if is_hip_runtime():
         return os.path.join(rocm_home(), "bin", "hipcc")
     elif is_musa_runtime():
-        return os.path.join(musa_home(), "bin", "mcc")
+        compiler_dir = os.path.join(musa_home(), "bin")
+        return (
+            os.environ.get("PYTORCH_MCC")
+            or shutil.which("mcc3", path=compiler_dir)
+            or os.path.join(compiler_dir, "mcc")
+        )
     else:
         return os.path.join(cuda_home(), "bin", "nvcc")
 

@@ -1,6 +1,7 @@
 import ast
 import hashlib
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -15,6 +16,70 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 class MusaWheelReleaseTest(unittest.TestCase):
+    def test_build_does_not_relabel_existing_wheels(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scripts = root / "scripts/ci/musa"
+            scripts.mkdir(parents=True)
+            for name in ("build_musa53_wheel.sh", "rename_wheels_musa.sh"):
+                shutil.copy2(ROOT / "scripts/ci/musa" / name, scripts / name)
+            aot = root / "python/sglang/kernels/aot"
+            dist = aot / "dist"
+            dist.mkdir(parents=True)
+            old = dist / "sglang_kernel-0.4.8+musa43-cp310-cp310-linux_x86_64.whl"
+            old.write_bytes(b"previous build")
+            fixture = root / "sglang_kernel-0.4.9-cp310-cp310-linux_x86_64.whl"
+            with WheelFile(fixture, "w") as archive:
+                archive.writestr(
+                    "sglang_kernel-0.4.9.dist-info/METADATA",
+                    b"Metadata-Version: 2.1\nName: sglang-kernel\nVersion: 0.4.9\n",
+                )
+                archive.writestr(
+                    "sglang_kernel-0.4.9.dist-info/WHEEL",
+                    b"Wheel-Version: 1.0\nRoot-Is-Purelib: false\nTag: cp310-cp310-linux_x86_64\n",
+                )
+            (aot / "pyproject_musa.toml").write_text("")
+            (aot / "setup_musa.py").write_text(
+                "import os, shutil, sys\nfrom pathlib import Path\n"
+                "output = Path(sys.argv[sys.argv.index('--dist-dir') + 1])\n"
+                "output.mkdir(parents=True)\n"
+                "shutil.copy2(os.environ['FIXTURE_WHEEL'], output)\n"
+            )
+            binaries = root / "bin"
+            binaries.mkdir()
+            for name, body in (
+                ("mcc3", "#!/bin/sh\nexit 0\n"),
+                (
+                    "python3",
+                    '#!/bin/sh\nif [ "$1" = "-c" ]; then exit 0; fi\nexec "$REAL_PYTHON" "$@"\n',
+                ),
+            ):
+                executable = binaries / name
+                executable.write_text(body)
+                executable.chmod(0o755)
+            subprocess.run(
+                ["bash", str(scripts / "build_musa53_wheel.sh")],
+                env={
+                    **os.environ,
+                    "PATH": f"{binaries}:{os.environ['PATH']}",
+                    "MUSA_HOME": str(root),
+                    "PYTORCH_MCC": str(binaries / "mcc3"),
+                    "PYTHON": sys.executable,
+                    "REAL_PYTHON": sys.executable,
+                    "FIXTURE_WHEEL": str(fixture),
+                },
+                check=True,
+                capture_output=True,
+            )
+            self.assertEqual(old.read_bytes(), b"previous build")
+            self.assertEqual(
+                {path.name for path in dist.glob("*.whl")},
+                {
+                    old.name,
+                    "sglang_kernel-0.4.9+musa53-cp310-cp310-manylinux2014_x86_64.whl",
+                },
+            )
+
     def test_aot_standard_preserves_legacy_build_override(self):
         source = ROOT / "python/sglang/kernels/aot/setup_musa.py"
         assignments = [

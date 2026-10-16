@@ -90,6 +90,7 @@ def test_musa_ninja_uses_the_musa_device_compiler(monkeypatch):
 
 
 def test_musa_toolchain_flags(monkeypatch):
+    monkeypatch.delenv("PYTORCH_MCC", raising=False)
     monkeypatch.setattr(toolchain, "is_hip_runtime", lambda: False)
     monkeypatch.setattr(toolchain, "is_musa_runtime", lambda: True)
     monkeypatch.setattr(toolchain, "musa_home", lambda: "/opt/musa")
@@ -115,6 +116,24 @@ def test_musa_toolchain_flags(monkeypatch):
         "-lmusa",
         "-lmusart",
     ]
+
+
+@pytest.mark.parametrize("has_mcc3", [False, True])
+@pytest.mark.parametrize("override", [None, "/opt/custom/mcc3"])
+def test_musa_compiler_selection(monkeypatch, tmp_path, has_mcc3, override):
+    compiler_dir = tmp_path / "bin"
+    compiler_dir.mkdir()
+    if has_mcc3:
+        mcc3 = _write(compiler_dir / "mcc3", "#!/bin/sh\nexit 0\n")
+        mcc3.chmod(0o755)
+    monkeypatch.setattr(toolchain, "is_hip_runtime", lambda: False)
+    monkeypatch.setattr(toolchain, "is_musa_runtime", lambda: True)
+    monkeypatch.setattr(toolchain, "musa_home", lambda: str(tmp_path))
+    monkeypatch.delenv("PYTORCH_MCC", raising=False)
+    if override is not None:
+        monkeypatch.setenv("PYTORCH_MCC", override)
+    expected = override or str(compiler_dir / ("mcc3" if has_mcc3 else "mcc"))
+    assert toolchain.device_compiler_path.__wrapped__() == expected
 
 
 @pytest.mark.parametrize("hip", [False, True])

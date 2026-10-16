@@ -26,7 +26,17 @@
 #include <cstdint>
 #include <optional>
 #include <type_traits>
-#ifdef USE_ROCM
+#ifndef USE_ROCM
+#ifdef USE_MUSA
+#include <sgl_kernel/musa.h>
+#else
+#include <cuda.h>
+#include <cuda_bf16.h>
+#include <cuda_fp16.h>
+#include <cuda_fp8.h>
+#include <cuda_runtime.h>
+#endif
+#else
 #include <hip/hip_bf16.h>
 #include <hip/hip_fp16.h>
 #include <hip/hip_runtime.h>
@@ -50,19 +60,27 @@ inline constexpr auto cudaSuccess = hipSuccess;
 #define cudaDevAttrComputeCapabilityMinor hipDeviceAttributeComputeCapabilityMinor
 #define cudaFuncSetAttribute hipFuncSetAttribute
 #define cudaFuncAttributeMaxDynamicSharedMemorySize hipFuncAttributeMaxDynamicSharedMemorySize
-#elif defined(USE_MUSA)
-#include <sgl_kernel/musa.h>
-#else
-#include <cuda.h>
-#include <cuda_bf16.h>
-#include <cuda_fp16.h>
-#include <cuda_fp8.h>
-#include <cuda_runtime.h>
 #endif
 
 namespace sglang {
 
-#ifdef USE_ROCM
+#ifndef USE_ROCM
+using fp32_t = float;
+using fp16_t = __half;
+using bf16_t = __nv_bfloat16;
+using fp8_e4m3_t = __nv_fp8_e4m3;
+using fp8_e5m2_t = __nv_fp8_e5m2;
+
+using fp32x2_t = float2;
+using fp16x2_t = __half2;
+using bf16x2_t = __nv_bfloat162;
+using fp8x2_e4m3_t = __nv_fp8x2_e4m3;
+using fp8x2_e5m2_t = __nv_fp8x2_e5m2;
+using fp8x4_e4m3_t = __nv_fp8x4_e4m3;
+using fp8x4_e5m2_t = __nv_fp8x4_e5m2;
+
+using fp32x4_t = float4;
+#else
 using fp32_t = float;
 using fp16_t = __half;
 using bf16_t = __hip_bfloat16;
@@ -76,61 +94,28 @@ using fp8x2_e5m2_t = uint16_t;
 using fp8x4_e4m3_t = uint32_t;
 using fp8x4_e5m2_t = uint32_t;
 using fp32x4_t = float4;
-#elif defined(USE_MUSA)
-using fp32_t = float;
-using fp16_t = __half;
-using bf16_t = __nv_bfloat16;
-using fp8_e4m3_t = __nv_fp8_e4m3;
-using fp8_e5m2_t = __nv_fp8_e5m2;
-
-using fp32x2_t = float2;
-using fp16x2_t = __half2;
-using bf16x2_t = __nv_bfloat162;
-using fp8x2_e4m3_t = __nv_fp8x2_e4m3;
-using fp8x2_e5m2_t = __nv_fp8x2_e5m2;
-using fp8x4_e4m3_t = __nv_fp8x4_e4m3;
-using fp8x4_e5m2_t = __nv_fp8x4_e5m2;
-
-using fp32x4_t = float4;
-#else
-using fp32_t = float;
-using fp16_t = __half;
-using bf16_t = __nv_bfloat16;
-using fp8_e4m3_t = __nv_fp8_e4m3;
-using fp8_e5m2_t = __nv_fp8_e5m2;
-
-using fp32x2_t = float2;
-using fp16x2_t = __half2;
-using bf16x2_t = __nv_bfloat162;
-using fp8x2_e4m3_t = __nv_fp8x2_e4m3;
-using fp8x2_e5m2_t = __nv_fp8x2_e5m2;
-using fp8x4_e4m3_t = __nv_fp8x4_e4m3;
-using fp8x4_e5m2_t = __nv_fp8x4_e5m2;
-
-using fp32x4_t = float4;
 #endif
 
 /*
  * LDG Support
  */
-#ifdef USE_ROCM
-#define SGLANG_LDG(arg) *(arg)
-#elif defined(USE_MUSA)
-#define SGLANG_LDG(arg) *(arg)
-#else
+#if !defined(USE_ROCM) && !defined(USE_MUSA)
 #define SGLANG_LDG(arg) __ldg(arg)
+#else
+#define SGLANG_LDG(arg) *(arg)
 #endif
 
 // DLPack device type for the current platform
-#ifdef USE_ROCM
-inline constexpr auto kDLGPU = kDLROCM;
-inline constexpr auto kDLGPUHost = kDLROCMHost;
-#elif defined(USE_MUSA)
+#ifndef USE_ROCM
+#ifdef USE_MUSA
 inline constexpr auto kDLGPU = kDLExtDev;
-inline constexpr auto kDLGPUHost = kDLCUDAHost;
 #else
 inline constexpr auto kDLGPU = kDLCUDA;
+#endif
 inline constexpr auto kDLGPUHost = kDLCUDAHost;
+#else
+inline constexpr auto kDLGPU = kDLROCM;
+inline constexpr auto kDLGPUHost = kDLROCMHost;
 #endif
 
 namespace device {
@@ -142,13 +127,7 @@ namespace device {
 // Architecture detection: SGL_CUDA_ARCH is injected by load_jit() and is
 // available in both host and device compilation passes, whereas __CUDA_ARCH__
 // is only defined by nvcc during the device pass.
-#ifdef USE_ROCM
-#define SGL_ARCH_HOPPER_OR_GREATER 0
-#define SGL_ARCH_BLACKWELL_OR_GREATER 0
-#elif defined(USE_MUSA)
-#define SGL_ARCH_HOPPER_OR_GREATER 0
-#define SGL_ARCH_BLACKWELL_OR_GREATER 0
-#else
+#if !defined(USE_ROCM) && !defined(USE_MUSA)
 #if !defined(SGL_CUDA_ARCH)
 #error "SGL_CUDA_ARCH is not defined. JIT compilation must inject -DSGL_CUDA_ARCH via load_jit()."
 #endif
@@ -158,6 +137,9 @@ static_assert(
 #endif
 #define SGL_ARCH_HOPPER_OR_GREATER (SGL_CUDA_ARCH >= 900)
 #define SGL_ARCH_BLACKWELL_OR_GREATER ((SGL_CUDA_ARCH >= 1000) && (CUDA_VERSION >= 12090))
+#else  // USE_ROCM or USE_MUSA
+#define SGL_ARCH_HOPPER_OR_GREATER 0
+#define SGL_ARCH_BLACKWELL_OR_GREATER 0
 #endif
 
 // Maximum vector size in bytes supported by current architecture.
@@ -169,8 +151,6 @@ inline constexpr std::size_t kMaxVecBytes = SGL_ARCH_BLACKWELL_OR_GREATER ? 32 :
 inline constexpr uint32_t kWarpThreads = 32u;
 /// \brief Most implementations prefer this name; keep the alias for them.
 inline constexpr uint32_t kWarpSize = kWarpThreads;
-
-using std::type_identity_t;
 
 /**
  * \brief This thread's index within its logical `kNumThreads` group.
@@ -189,22 +169,23 @@ using std::type_identity_t;
  */
 template <uint32_t kNumThreads = kWarpThreads>
 SGL_DEVICE uint32_t get_lane_id() {
-#ifdef USE_ROCM
+#ifndef USE_ROCM
+  static_assert(kNumThreads <= 32 && host::is_pow2(kNumThreads));
+#ifdef USE_MUSA
+  return threadIdx.x % kNumThreads;
+#else
+  uint32_t lane_id;
+  asm volatile("mov.u32 %0, %%laneid;" : "=r"(lane_id));
+  if constexpr (kNumThreads != 32) lane_id %= kNumThreads;
+  return lane_id;
+#endif
+#else
   static_assert(kNumThreads <= 64 && host::is_pow2(kNumThreads));
   // AMD has no lane-id register: `__lane_id()` is computed from the exec mask as
   // a `v_mbcnt_lo`/`v_mbcnt_hi` pair, and the group mask is still needed on top.
   // Masking `threadIdx.x` -- already live in v0 -- is 2 instructions cheaper and
   // yields the same value (measured on gfx950, hipcc 7.0).
   return threadIdx.x % kNumThreads;
-#elif defined(USE_MUSA)
-  static_assert(kNumThreads <= 32 && host::is_pow2(kNumThreads));
-  return threadIdx.x % kNumThreads;
-#else
-  static_assert(kNumThreads <= 32 && host::is_pow2(kNumThreads));
-  uint32_t lane_id;
-  asm volatile("mov.u32 %0, %%laneid;" : "=r"(lane_id));
-  if constexpr (kNumThreads != 32) lane_id %= kNumThreads;
-  return lane_id;
 #endif
 }
 
@@ -292,7 +273,7 @@ SGL_DEVICE T load_as(const void* ptr, int64_t offset = 0) {
  * the template parameter `T`, which can avoid accidentally using the wrong type.
  */
 template <typename T>
-SGL_DEVICE void store_as(void* ptr, type_identity_t<T> val, int64_t offset = 0) {
+SGL_DEVICE void store_as(void* ptr, std::type_identity_t<T> val, int64_t offset = 0) {
   static_cast<T*>(ptr)[offset] = val;
 }
 
@@ -450,10 +431,7 @@ struct LaunchKernel {
   }
 
   auto enable_pdl(bool enabled = true) -> LaunchKernel& {
-#ifdef USE_ROCM
-    (void)enabled;
-    m_config.numAttrs = 0;
-#elif defined(USE_MUSA)
+#if defined(USE_ROCM) || defined(USE_MUSA)
     (void)enabled;
     m_config.numAttrs = 0;
 #else
@@ -468,9 +446,7 @@ struct LaunchKernel {
   }
 
   auto enable_cluster(dim3 cluster_dim) -> LaunchKernel& {
-#ifdef USE_ROCM
-    (void)cluster_dim;
-#elif defined(USE_MUSA)
+#if defined(USE_ROCM) || defined(USE_MUSA)
     (void)cluster_dim;
 #else
     auto& attr = m_attrs[m_config.numAttrs++];

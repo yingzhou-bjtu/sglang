@@ -216,12 +216,9 @@ def _target_tag() -> str:
     """
     if is_hip_runtime():
         return toolchain.gpu_arch_name().split(":")[0] or "unknown"
-    elif is_musa_runtime():
-        arch = get_jit_cuda_arch()
-        return f"mp{arch.major}{arch.minor}{arch.suffix}"
-    else:
-        arch = get_jit_cuda_arch()
-        return f"sm{arch.major}{arch.minor}{arch.suffix}"
+    arch = get_jit_cuda_arch()
+    prefix = "mp" if is_musa_runtime() else "sm"
+    return f"{prefix}{arch.major}{arch.minor}{arch.suffix}"
 
 
 @cache_once

@@ -27,7 +27,9 @@ CPP
 
 cd python/sglang/kernels/aot
 cp pyproject_musa.toml pyproject.toml
-python3 setup_musa.py bdist_wheel
-compgen -G 'dist/*.whl' > /dev/null
+python3 setup_musa.py bdist_wheel --dist-dir "$probe_dir/wheels"
+compgen -G "$probe_dir/wheels/*.whl" > /dev/null
 cd ../../../..
-bash scripts/ci/musa/rename_wheels_musa.sh 53 python/sglang/kernels/aot/dist
+bash scripts/ci/musa/rename_wheels_musa.sh 53 "$probe_dir/wheels"
+mkdir -p python/sglang/kernels/aot/dist
+cp "$probe_dir"/wheels/*.whl python/sglang/kernels/aot/dist/

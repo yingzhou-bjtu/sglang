@@ -373,18 +373,21 @@ jobs:
           name: wheel-python${{ matrix.python-version }}-musa${{ matrix.musa-version }}
           path: python/sglang/kernels/aot/dist/*
 
-  release-musa43:
-    needs: build-musa43
+  release-musa:
+    needs: [build-musa43, build-musa53]
+    if: ${{ !cancelled() && (needs.build-musa43.result == 'success' || needs.build-musa53.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.pr_number && format('refs/pull/{0}/head', inputs.pr_number) || '' }}
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: python/sglang/kernels/aot/dist/
           merge-multiple: true
-          pattern: wheel-*-musa43
+          pattern: wheel-*musa*
 
       - name: Set tag name
         id: set_tag_name
@@ -402,8 +405,7 @@ jobs:
           tag_name: ${{ steps.set_tag_name.outputs.tag_name }}
           repository: sgl-project/whl
           token: ${{ secrets.GH_PAT_FOR_WHL_RELEASE }}
-          files: |
-            python/sglang/kernels/aot/dist/*
+          files: python/sglang/kernels/aot/dist/*+musa*-*.whl
 
       - name: Clone wheel index
         run: git clone https://oauth2:${WHL_TOKEN}@github.com/sgl-project/whl.git sgl-whl
@@ -411,7 +413,12 @@ jobs:
           WHL_TOKEN: ${{ secrets.GH_PAT_FOR_WHL_RELEASE }}
 
       - name: Update wheel index
-        run: python3 scripts/update_kernel_whl_index.py --musa 43
+        run: |
+          for version in 43 53; do
+            if compgen -G "python/sglang/kernels/aot/dist/*+musa${version}-*.whl" > /dev/null; then
+              python3 scripts/update_kernel_whl_index.py --musa "$version"
+            fi
+          done
 
       - name: Push wheel index
         run: |
@@ -456,54 +463,3 @@ jobs:
           name: wheel-musa53
           path: python/sglang/kernels/aot/dist/*+musa53-*.whl
           if-no-files-found: error
-
-  release-musa53:
-    needs: [build-musa53, release-musa43]
-    if: ${{ !cancelled() && needs.build-musa53.result == 'success' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.pr_number && format('refs/pull/{0}/head', inputs.pr_number) || '' }}
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: python/sglang/kernels/aot/dist/
-          merge-multiple: true
-          pattern: wheel-musa53
-
-      - name: Set tag name
-        id: set_tag_name
-        run: |
-          if [ -z "${{ inputs.tag_name }}" ]; then
-            TAG_NAME="v$(cat python/sglang/kernels/aot/python/sgl_kernel/version.py | cut -d'"' -f2)"
-            echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
-          else
-            echo "tag_name=${{ inputs.tag_name }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.set_tag_name.outputs.tag_name }}
-          repository: sgl-project/whl
-          token: ${{ secrets.GH_PAT_FOR_WHL_RELEASE }}
-          files: python/sglang/kernels/aot/dist/*+musa53-*.whl
-
-      - name: Clone wheel index
-        run: git clone https://oauth2:${WHL_TOKEN}@github.com/sgl-project/whl.git sgl-whl
-        env:
-          WHL_TOKEN: ${{ secrets.GH_PAT_FOR_WHL_RELEASE }}
-
-      - name: Update wheel index
-        run: python3 scripts/update_kernel_whl_index.py --musa 53
-
-      - name: Push wheel index
-        run: |
-          cd sgl-whl
-          git config --local user.name "sglang-bot"
-          git config --local user.email "sglangbot@gmail.com"
-          git add -A
-          git commit -m "update whl index"
-          git push
