@@ -18,10 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <utility>
-
-#ifndef USE_ROCM
-#include <cuda_runtime.h>
-#else
+#ifdef USE_ROCM
 #include <hip/hip_runtime.h>
 #ifndef cudaOccupancyMaxActiveBlocksPerMultiprocessor
 #define cudaOccupancyMaxActiveBlocksPerMultiprocessor hipOccupancyMaxActiveBlocksPerMultiprocessor
@@ -59,6 +56,10 @@ cudaOccupancyAvailableDynamicSMemPerBlock(std::size_t* smem, const void* func, i
   return hipSuccess;
 }
 #endif
+#elif defined(USE_MUSA)
+#include <sgl_kernel/musa.h>
+#else
+#include <cuda_runtime.h>
 #endif
 
 namespace sglang {
@@ -221,7 +222,7 @@ struct L1Carveout {
 
 template <typename T>
 inline void set_smem_carveout(T kernel, int percent) {
-#ifdef USE_ROCM
+#if defined(USE_ROCM) || defined(USE_MUSA)
   (void)kernel, (void)percent;
 #else
   CHECK_CUDA(::cudaFuncSetAttribute(kernel, cudaFuncAttributePreferredSharedMemoryCarveout, percent));
@@ -236,7 +237,7 @@ inline auto set_prefer_l1_carveout_with_occupancy(
     T kernel,
     const uint32_t block_threads,
     const std::size_t dyn_smem_bytes = 0) -> L1Carveout {
-#ifdef USE_ROCM
+#if defined(USE_ROCM) || defined(USE_MUSA)
   (void)lower_bound_percent, (void)upper_bound_percent, (void)min_occupancy;
   return {-1, get_blocks_per_sm(kernel, block_threads, dyn_smem_bytes)};
 #else
@@ -264,7 +265,7 @@ inline auto set_prefer_l1_carveout_with_occupancy(
 /// reports percent -1. Wrap it in `init_per_device(device, ...)` to run it once per device.
 template <typename T>
 inline auto set_prefer_l1_carveout(T kernel, uint32_t block_threads, std::size_t dyn_smem_bytes = 0) -> L1Carveout {
-#ifdef USE_ROCM
+#if defined(USE_ROCM) || defined(USE_MUSA)
   return {-1, get_blocks_per_sm(kernel, block_threads, dyn_smem_bytes)};
 #else
   const auto kernel_ptr = reinterpret_cast<const void*>(kernel);

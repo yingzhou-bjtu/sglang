@@ -1,0 +1,54 @@
+#pragma once
+
+#include <musa_bf16.h>
+#include <musa_fp16.h>
+#include <musa_fp8.h>
+#include <musa_runtime.h>
+
+#ifndef __grid_constant__
+#define __grid_constant__
+#endif
+
+#define cudaError_t musaError_t
+#define cudaStream_t musaStream_t
+#define cudaLaunchConfig_t musaLaunchConfig_t
+#define cudaLaunchAttribute musaLaunchAttribute
+#define cudaSuccess musaSuccess
+#define cudaStreamPerThread musaStreamPerThread
+#define cudaGetErrorString musaGetErrorString
+#define cudaGetLastError musaGetLastError
+#define cudaLaunchKernel musaLaunchKernel
+#define cudaLaunchKernelEx musaLaunchKernelEx
+#define cudaMemcpy musaMemcpy
+#define cudaMemcpyAsync musaMemcpyAsync
+#define cudaMemcpyHostToDevice musaMemcpyHostToDevice
+#define cudaMemcpyDeviceToHost musaMemcpyDeviceToHost
+#define cudaMemcpyDeviceToDevice musaMemcpyDeviceToDevice
+#define cudaDeviceGetAttribute musaDeviceGetAttribute
+#define cudaGetDevice musaGetDevice
+#define cudaGetDeviceCount musaGetDeviceCount
+#define cudaGetDeviceProperties musaGetDeviceProperties
+#define cudaRuntimeGetVersion musaRuntimeGetVersion
+#define cudaHostGetDevicePointer musaHostGetDevicePointer
+#define cudaOccupancyMaxActiveBlocksPerMultiprocessor musaOccupancyMaxActiveBlocksPerMultiprocessor
+#define cudaFuncSetAttribute musaFuncSetAttribute
+#define cudaFuncAttributeMaxDynamicSharedMemorySize musaFuncAttributeMaxDynamicSharedMemorySize
+#define cudaDevAttrMultiProcessorCount musaDevAttrMultiProcessorCount
+#define cudaDevAttrComputeCapabilityMajor musaDevAttrComputeCapabilityMajor
+#define cudaDevAttrComputeCapabilityMinor musaDevAttrComputeCapabilityMinor
+#define cudaDevAttrMaxSharedMemoryPerBlock musaDevAttrMaxSharedMemoryPerBlock
+#define cudaDevAttrMaxSharedMemoryPerBlockOptin musaDevAttrMaxSharedMemoryPerBlockOptin
+#define cudaDeviceProp musaDeviceProp
+#define cudaFuncAttributes musaFuncAttributes
+#define cudaLaunchAttributeProgrammaticStreamSerialization musaLaunchAttributeProgrammaticStreamSerialization
+#define cudaLaunchAttributeClusterDimension musaLaunchAttributeClusterDimension
+
+using __nv_bfloat16 = __mt_bfloat16;
+using __nv_bfloat162 = __mt_bfloat162;
+using __nv_fp8_e4m3 = __mt_fp8_e4m3;
+using __nv_fp8_e5m2 = __mt_fp8_e5m2;
+using __nv_fp8x2_e4m3 = __mt_fp8x2_e4m3;
+using __nv_fp8x2_e5m2 = __mt_fp8x2_e5m2;
+using __nv_fp8x4_e4m3 = __mt_fp8x4_e4m3;
+using __nv_fp8x4_e5m2 = __mt_fp8x4_e5m2;
+using __nv_fp8x2_storage_t = __mt_fp8x2_storage_t;
