@@ -35,6 +35,20 @@ jobs:
         with:
           ref: ${{ inputs.source_ref || 'fe244ce161e7d4d09e54504a898129c0a445926b' }}
 
+      - name: Inspect runner toolchain
+        run: |
+          id
+          hostname
+          uname -a
+          cat /etc/os-release
+          command -v sudo || true
+          sudo -n true || true
+          ls -la /opt /usr/local
+          find /opt /usr/local -maxdepth 3 \
+            \( -iname '*mtcc*' -o -iname '*musa53*' -o -iname '*musa-mtcc20x*' \) \
+            -print 2>/dev/null | head -100
+          apt-cache search '^mtcc|^musa-toolkit' 2>/dev/null | head -50
+
       - name: Configure MUSA toolchain
         run: |
           for required_path in \
