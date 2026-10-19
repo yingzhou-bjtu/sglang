@@ -9,7 +9,7 @@ on:
       source_ref:
         description: SGLang revision to test
         required: true
-        default: fe244ce161e7d4d09e54504a898129c0a445926b
+        default: e4dc82589a4eae0134ac696af80dd3142769501d
         type: string
 
 concurrency:
@@ -34,7 +34,7 @@ jobs:
     steps:
       - name: Checkout source
         env:
-          SOURCE_REF: ${{ inputs.source_ref || 'fe244ce161e7d4d09e54504a898129c0a445926b' }}
+          SOURCE_REF: ${{ inputs.source_ref || 'e4dc82589a4eae0134ac696af80dd3142769501d' }}
         run: |
           archive="${RUNNER_TEMP}/sglang-source.tar.gz"
           curl --fail --location \
@@ -77,22 +77,6 @@ jobs:
           compiler_version="$("$PYTORCH_MCC" --version)"
           printf '%s\n' "$compiler_version"
           grep -q 'clang version 20\.' <<< "$compiler_version"
-
-      - name: Add MUSA CUDA header shims
-        run: |
-          shim_dir="${RUNNER_TEMP}/musa-cuda-shims"
-          mkdir -p "${shim_dir}"
-          printf '%s\n' \
-            '#pragma once' \
-            '#include <musa_bf16.h>' \
-            'using __nv_bfloat16 = __mt_bfloat16;' \
-            'using __nv_bfloat162 = __mt_bfloat162;' \
-            > "${shim_dir}/cuda_bf16.h"
-          printf '%s\n' \
-            '#pragma once' \
-            '#include <musa_fp16.h>' \
-            > "${shim_dir}/cuda_fp16.h"
-          echo "CPATH=${shim_dir}${CPATH:+:${CPATH}}" >> "${GITHUB_ENV}"
 
       - name: Install test-only dependencies
         timeout-minutes: 10
