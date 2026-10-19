@@ -1,6 +1,9 @@
 name: MUSA SDK 5.3 + MTCC20X
 
 on:
+  push:
+    branches:
+      - ci/musa-sdk53-mtcc20x-20261019
   workflow_dispatch:
     inputs:
       source_ref:
@@ -10,7 +13,7 @@ on:
         type: string
 
 concurrency:
-  group: musa-sdk53-mtcc20x-${{ inputs.source_ref }}
+  group: musa-sdk53-mtcc20x-${{ inputs.source_ref || github.sha }}
   cancel-in-progress: true
 
 permissions:
@@ -30,7 +33,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.source_ref }}
+          ref: ${{ inputs.source_ref || 'fe244ce161e7d4d09e54504a898129c0a445926b' }}
 
       - name: Configure MUSA toolchain
         run: |
