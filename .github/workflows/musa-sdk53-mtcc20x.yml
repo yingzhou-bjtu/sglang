@@ -37,9 +37,16 @@ jobs:
 
       - name: Configure MUSA toolchain
         run: |
-          test -x "${MUSA_MTCC20X_HOME}/bin/mcc"
-          test -d "${MUSA_MTCC20X_HOME}/include"
-          test -d "${MUSA_SDK53_HOME}/lib"
+          for required_path in \
+            "${MUSA_MTCC20X_HOME}/bin/mcc" \
+            "${MUSA_MTCC20X_HOME}/include" \
+            "${MUSA_SDK53_HOME}/lib"; do
+            if [[ ! -e "${required_path}" ]]; then
+              printf '::error::Missing MUSA toolchain path: %s\n' "${required_path}"
+              ls -la "$(dirname "${required_path}")" || true
+              exit 1
+            fi
+          done
 
           composite_root="${RUNNER_TEMP}/musa-sdk53-mtcc20x-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           mkdir -p "${composite_root}"
