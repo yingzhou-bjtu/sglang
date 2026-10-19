@@ -73,7 +73,20 @@ jobs:
       - name: Install dependencies
         timeout-minutes: 40
         run: |
-          bash scripts/ci/musa/musa_install_dependency.sh
+          wheelhouse="${RUNNER_TEMP}/musa-sdk53-wheelhouse"
+          mkdir -p "${wheelhouse}"
+          python3 -m pip download \
+            --dest "${wheelhouse}" \
+            --index-url https://dl.mthreads.com/repo/api/pypi/pypi/simple \
+            --trusted-host dl.mthreads.com \
+            --no-deps \
+            "torch==2.11.0.post2+musa5.2.0" \
+            "torch_musa==2.11.0.post2+musa5.2.0" \
+            "apache-tvm-ffi==0.1.9.post3+musa.1"
+
+          WHL_DIR="${wheelhouse}" \
+            bash scripts/ci/musa/musa_install_dependency.sh --skip-sglang-build
+          python3 -m pip install --user ipython msgspec orjson
 
       - name: Run MUSA JIT tests
         timeout-minutes: 60
