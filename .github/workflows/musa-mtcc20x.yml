@@ -31,6 +31,7 @@ jobs:
       TORCHADA_ENABLE_CPP_OPS: 1
       HF_HUB_CACHE: /hf-cache/hub
       PYTHONPATH: ${{ github.workspace }}/python
+      SGLANG_JIT_CACHE_DIR: ${{ runner.temp }}/sglang-jit-cache
     steps:
       - name: Checkout source
         env:
@@ -90,6 +91,7 @@ jobs:
             psutil \
             pybase64 \
             requests \
+            scipy \
             setproctitle \
             starlette \
             tqdm
@@ -99,4 +101,6 @@ jobs:
         run: |
           pytest test/registered/unit/kernels/test_jit_cache.py
           pytest test/registered/kernels/ops/speculative/test_ngram_embedding.py
+          pytest test/registered/kernels/ops/moe/test_jit_grouped_topk.py
+          pytest test/registered/kernels/ops/quantization/test_hadamard_jit.py
           pytest python/sglang/kernels/aot/tests/test_torch_defaults_reset.py
