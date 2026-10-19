@@ -91,7 +91,16 @@ jobs:
       - name: Install test dependencies
         timeout-minutes: 10
         run: |
-          python3 -m pip install --user ipython msgspec orjson
+          python3 -m pip install --user \
+            aiohttp \
+            IPython \
+            msgspec \
+            numpy \
+            orjson \
+            psutil \
+            requests \
+            setproctitle \
+            tqdm
 
       - name: Run MUSA JIT tests
         timeout-minutes: 60
