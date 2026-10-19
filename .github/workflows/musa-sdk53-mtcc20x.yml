@@ -104,9 +104,12 @@ jobs:
             msgspec \
             numpy \
             orjson \
+            pillow \
             psutil \
+            pybase64 \
             requests \
             setproctitle \
+            starlette \
             tqdm
 
       - name: Run MUSA JIT tests
