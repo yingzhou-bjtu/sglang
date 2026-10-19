@@ -1,4 +1,4 @@
-name: MUSA SDK 5.3 + MTCC20X
+name: MUSA MTCC20X
 
 on:
   push:
@@ -13,7 +13,7 @@ on:
         type: string
 
 concurrency:
-  group: musa-sdk53-mtcc20x-${{ inputs.source_ref || github.sha }}
+  group: musa-mtcc20x-${{ inputs.source_ref || github.sha }}
   cancel-in-progress: true
 
 permissions:
@@ -27,7 +27,6 @@ jobs:
       MUSA_MTCC20X_HOME: ${{ vars.MUSA_MTCC20X_HOME }}
       MUSA_MTCC20X_ARCHIVE_URL: ${{ vars.MUSA_MTCC20X_ARCHIVE_URL }}
       MUSA_MTCC20X_ARCHIVE_SHA256: ${{ vars.MUSA_MTCC20X_ARCHIVE_SHA256 }}
-      MUSA_RUNTIME_VERSION: 5.3.0
       MTGPU_TARGET: mp_31
       TORCHADA_ENABLE_CPP_OPS: 1
       HF_HUB_CACHE: /hf-cache/hub
@@ -62,7 +61,7 @@ jobs:
         run: |
           test -x "${MUSA_MTCC20X_HOME}/bin/mcc"
           test -d "${MUSA_MTCC20X_HOME}/include"
-          test -e "${MUSA_MTCC20X_HOME}/lib/libmusart.so.${MUSA_RUNTIME_VERSION}"
+          test -e "${MUSA_MTCC20X_HOME}/lib/libmusart.so"
 
           {
             echo "MUSA_HOME=${MUSA_MTCC20X_HOME}"
@@ -71,37 +70,19 @@ jobs:
             echo "LD_LIBRARY_PATH=${MUSA_MTCC20X_HOME}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
           } >> "${GITHUB_ENV}"
 
-      - name: Verify SDK and compiler
+      - name: Verify MTCC20X compiler
         run: |
           python3 -c "import torch; print(torch.__version__); print(torch.musa.device_count())"
           compiler_version="$("$PYTORCH_MCC" --version)"
           printf '%s\n' "$compiler_version"
           grep -q 'clang version 20\.' <<< "$compiler_version"
 
-      - name: Install dependencies
-        timeout-minutes: 40
-        run: |
-          wheelhouse="${RUNNER_TEMP}/musa-sdk53-wheelhouse"
-          mkdir -p "${wheelhouse}"
-          python3 -m pip download \
-            --dest "${wheelhouse}" \
-            --index-url https://dl.mthreads.com/repo/api/pypi/pypi/simple \
-            --trusted-host dl.mthreads.com \
-            --no-deps \
-            "torch==2.11.0.post2+musa5.2.0" \
-            "torch_musa==2.11.0.post2+musa5.2.0" \
-            "apache-tvm-ffi==0.1.9.post3+musa.1"
-
-          WHL_DIR="${wheelhouse}" \
-            bash scripts/ci/musa/musa_install_dependency.sh --skip-sglang-build
-
-      - name: Install test dependencies
+      - name: Install test-only dependencies
         timeout-minutes: 10
         run: |
           python3 -m pip install --user \
             aiohttp \
             IPython \
-            mkl==2024.2.0 \
             msgspec \
             numpy \
             orjson \
@@ -112,8 +93,6 @@ jobs:
             setproctitle \
             starlette \
             tqdm
-          echo "LD_LIBRARY_PATH=${PYTHONUSERBASE}/lib:${PYTHONUSERBASE}/lib/python3.10/site-packages${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
-            >> "${GITHUB_ENV}"
 
       - name: Run MUSA JIT tests
         timeout-minutes: 60
