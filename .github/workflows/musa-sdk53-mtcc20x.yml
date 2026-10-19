@@ -26,6 +26,7 @@ jobs:
     env:
       MUSA_SDK53_HOME: ${{ vars.MUSA_SDK53_HOME }}
       MUSA_MTCC20X_HOME: ${{ vars.MUSA_MTCC20X_HOME }}
+      MUSA_TOOLCHAIN_PING_URL: ${{ vars.MUSA_TOOLCHAIN_PING_URL }}
       MTGPU_TARGET: mp_31
       TORCHADA_ENABLE_CPP_OPS: 1
       HF_HUB_CACHE: /hf-cache/hub
@@ -50,6 +51,7 @@ jobs:
           apt-cache search '^mtcc|^musa-toolkit' 2>/dev/null | head -50
           docker version --format '{{.Server.Version}}' 2>&1 || true
           docker ps --format '{{.Names}}\t{{.Image}}' 2>&1 | head -100
+          curl -fsS --max-time 10 "${MUSA_TOOLCHAIN_PING_URL}"
 
       - name: Configure MUSA toolchain
         run: |
