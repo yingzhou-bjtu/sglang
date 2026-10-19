@@ -78,6 +78,22 @@ jobs:
           printf '%s\n' "$compiler_version"
           grep -q 'clang version 20\.' <<< "$compiler_version"
 
+      - name: Add MUSA CUDA header shims
+        run: |
+          shim_dir="${RUNNER_TEMP}/musa-cuda-shims"
+          mkdir -p "${shim_dir}"
+          printf '%s\n' \
+            '#pragma once' \
+            '#include <musa_bf16.h>' \
+            'using __nv_bfloat16 = __mt_bfloat16;' \
+            'using __nv_bfloat162 = __mt_bfloat162;' \
+            > "${shim_dir}/cuda_bf16.h"
+          printf '%s\n' \
+            '#pragma once' \
+            '#include <musa_fp16.h>' \
+            > "${shim_dir}/cuda_fp16.h"
+          echo "CPATH=${shim_dir}${CPATH:+:${CPATH}}" >> "${GITHUB_ENV}"
+
       - name: Install test-only dependencies
         timeout-minutes: 10
         run: |
