@@ -24,8 +24,10 @@ jobs:
     runs-on: s5000-1-gpu-runner
     timeout-minutes: 240
     env:
-      MUSA_SDK53_HOME: ${{ vars.MUSA_SDK53_HOME }}
       MUSA_MTCC20X_HOME: ${{ vars.MUSA_MTCC20X_HOME }}
+      MUSA_MTCC20X_ARCHIVE_URL: ${{ vars.MUSA_MTCC20X_ARCHIVE_URL }}
+      MUSA_MTCC20X_ARCHIVE_SHA256: ${{ vars.MUSA_MTCC20X_ARCHIVE_SHA256 }}
+      MUSA_RUNTIME_VERSION: 5.3.0
       MTGPU_TARGET: mp_31
       TORCHADA_ENABLE_CPP_OPS: 1
       HF_HUB_CACHE: /hf-cache/hub
@@ -35,51 +37,30 @@ jobs:
         with:
           ref: ${{ inputs.source_ref || 'fe244ce161e7d4d09e54504a898129c0a445926b' }}
 
-      - name: Inspect runner toolchain
+      - name: Provision MUSA toolchain
         run: |
-          id
-          hostname
-          uname -a
-          cat /etc/os-release
-          command -v sudo || true
-          if sudo -n true; then printf '%s\n' SUDO_OK; else printf '%s\n' SUDO_DENIED; fi
-          ls -la /opt /usr/local
-          find /opt /usr/local -maxdepth 3 \
-            \( -iname '*mtcc*' -o -iname '*musa53*' -o -iname '*musa-mtcc20x*' \) \
-            -print 2>/dev/null | head -100
-          apt-cache search '^mtcc|^musa-toolkit' 2>/dev/null | head -50
-          docker version --format '{{.Server.Version}}' 2>&1 || true
-          docker ps --format '{{.Names}}\t{{.Image}}' 2>&1 | head -100
-          ls -l /var/run/docker.sock 2>&1 || true
-          curl --unix-socket /var/run/docker.sock http://localhost/version 2>&1 | head -40 || true
+          if [[ ! -x "${MUSA_MTCC20X_HOME}/bin/mcc" ]]; then
+            archive="${RUNNER_TEMP}/musa_toolkits_install_full.tar.gz"
+            curl --fail --location --retry 5 --retry-delay 5 \
+              --output "${archive}" "${MUSA_MTCC20X_ARCHIVE_URL}"
+            printf '%s  %s\n' "${MUSA_MTCC20X_ARCHIVE_SHA256}" "${archive}" \
+              | sha256sum --check -
+            sudo mkdir -p /opt/musa-mtcc20x
+            sudo tar -xzf "${archive}" -C /opt/musa-mtcc20x
+            sudo ln -sfn /opt/musa-mtcc20x/musa_toolkits_5.1.0 /opt/musa-mtcc20x/musa
+          fi
 
       - name: Configure MUSA toolchain
         run: |
-          for required_path in \
-            "${MUSA_MTCC20X_HOME}/bin/mcc" \
-            "${MUSA_MTCC20X_HOME}/include" \
-            "${MUSA_SDK53_HOME}/lib"; do
-            if [[ ! -e "${required_path}" ]]; then
-              printf '::error::Missing MUSA toolchain path: %s\n' "${required_path}"
-              ls -la "$(dirname "${required_path}")" || true
-              exit 1
-            fi
-          done
-
-          composite_root="${RUNNER_TEMP}/musa-sdk53-mtcc20x-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          mkdir -p "${composite_root}"
-          ln -s "${MUSA_MTCC20X_HOME}/bin" "${composite_root}/bin"
-          ln -s "${MUSA_MTCC20X_HOME}/include" "${composite_root}/include"
-          ln -s "${MUSA_SDK53_HOME}/lib" "${composite_root}/lib"
-          if [[ -d "${MUSA_SDK53_HOME}/mudnn" ]]; then
-            ln -s "${MUSA_SDK53_HOME}/mudnn" "${composite_root}/mudnn"
-          fi
+          test -x "${MUSA_MTCC20X_HOME}/bin/mcc"
+          test -d "${MUSA_MTCC20X_HOME}/include"
+          test -e "${MUSA_MTCC20X_HOME}/lib/libmusart.so.${MUSA_RUNTIME_VERSION}"
 
           {
-            echo "MUSA_HOME=${composite_root}"
+            echo "MUSA_HOME=${MUSA_MTCC20X_HOME}"
             echo "PYTORCH_MCC=${MUSA_MTCC20X_HOME}/bin/mcc"
             echo "PATH=${MUSA_MTCC20X_HOME}/bin:${PATH}"
-            echo "LD_LIBRARY_PATH=${MUSA_SDK53_HOME}/lib:${MUSA_SDK53_HOME}/mudnn/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+            echo "LD_LIBRARY_PATH=${MUSA_MTCC20X_HOME}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
           } >> "${GITHUB_ENV}"
 
       - name: Verify SDK and compiler
