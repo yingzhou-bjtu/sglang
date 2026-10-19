@@ -71,16 +71,6 @@ jobs:
             echo "LD_LIBRARY_PATH=${MUSA_MTCC20X_HOME}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
           } >> "${GITHUB_ENV}"
 
-      - name: Install Torch runtime libraries
-        timeout-minutes: 15
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libmkl-core \
-            libmkl-gnu-thread \
-            libmkl-intel-lp64
-          sudo ldconfig
-
       - name: Verify SDK and compiler
         run: |
           python3 -c "import torch; print(torch.__version__); print(torch.musa.device_count())"
@@ -111,6 +101,7 @@ jobs:
           python3 -m pip install --user \
             aiohttp \
             IPython \
+            mkl==2024.2.0 \
             msgspec \
             numpy \
             orjson \
@@ -121,6 +112,8 @@ jobs:
             setproctitle \
             starlette \
             tqdm
+          echo "LD_LIBRARY_PATH=${PYTHONUSERBASE}/lib/python3.10/site-packages${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
+            >> "${GITHUB_ENV}"
 
       - name: Run MUSA JIT tests
         timeout-minutes: 60
