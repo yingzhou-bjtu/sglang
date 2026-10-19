@@ -27,11 +27,15 @@
 #include <optional>
 #include <type_traits>
 #ifndef USE_ROCM
+#ifdef USE_MUSA
+#include <sgl_kernel/musa.h>
+#else
 #include <cuda.h>
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
 #include <cuda_fp8.h>
 #include <cuda_runtime.h>
+#endif
 #else
 #include <hip/hip_bf16.h>
 #include <hip/hip_fp16.h>
@@ -95,7 +99,7 @@ using fp32x4_t = float4;
 /*
  * LDG Support
  */
-#ifndef USE_ROCM
+#if !defined(USE_ROCM) && !defined(USE_MUSA)
 #define SGLANG_LDG(arg) __ldg(arg)
 #else
 #define SGLANG_LDG(arg) *(arg)
@@ -103,7 +107,11 @@ using fp32x4_t = float4;
 
 // DLPack device type for the current platform
 #ifndef USE_ROCM
+#ifdef USE_MUSA
+inline constexpr auto kDLGPU = kDLExtDev;
+#else
 inline constexpr auto kDLGPU = kDLCUDA;
+#endif
 inline constexpr auto kDLGPUHost = kDLCUDAHost;
 #else
 inline constexpr auto kDLGPU = kDLROCM;
@@ -119,7 +127,7 @@ namespace device {
 // Architecture detection: SGL_CUDA_ARCH is injected by load_jit() and is
 // available in both host and device compilation passes, whereas __CUDA_ARCH__
 // is only defined by nvcc during the device pass.
-#if !defined(USE_ROCM)
+#if !defined(USE_ROCM) && !defined(USE_MUSA)
 #if !defined(SGL_CUDA_ARCH)
 #error "SGL_CUDA_ARCH is not defined. JIT compilation must inject -DSGL_CUDA_ARCH via load_jit()."
 #endif
@@ -129,7 +137,7 @@ static_assert(
 #endif
 #define SGL_ARCH_HOPPER_OR_GREATER (SGL_CUDA_ARCH >= 900)
 #define SGL_ARCH_BLACKWELL_OR_GREATER ((SGL_CUDA_ARCH >= 1000) && (CUDA_VERSION >= 12090))
-#else  // USE_ROCM
+#else  // USE_ROCM or USE_MUSA
 #define SGL_ARCH_HOPPER_OR_GREATER 0
 #define SGL_ARCH_BLACKWELL_OR_GREATER 0
 #endif
@@ -163,10 +171,14 @@ template <uint32_t kNumThreads = kWarpThreads>
 SGL_DEVICE uint32_t get_lane_id() {
 #ifndef USE_ROCM
   static_assert(kNumThreads <= 32 && host::is_pow2(kNumThreads));
+#ifdef USE_MUSA
+  return threadIdx.x % kNumThreads;
+#else
   uint32_t lane_id;
   asm volatile("mov.u32 %0, %%laneid;" : "=r"(lane_id));
   if constexpr (kNumThreads != 32) lane_id %= kNumThreads;
   return lane_id;
+#endif
 #else
   static_assert(kNumThreads <= 64 && host::is_pow2(kNumThreads));
   // AMD has no lane-id register: `__lane_id()` is computed from the exec mask as
@@ -338,7 +350,7 @@ inline const char* get_cuda_error_string(::cudaError_t error) {
   return ::cudaGetErrorString(error);
 }
 
-#ifndef USE_ROCM
+#if !defined(USE_ROCM) && !defined(USE_MUSA)
 
 inline bool is_cuda_error(::CUresult error) {
   return error != ::CUDA_SUCCESS;
@@ -419,7 +431,7 @@ struct LaunchKernel {
   }
 
   auto enable_pdl(bool enabled = true) -> LaunchKernel& {
-#ifdef USE_ROCM
+#if defined(USE_ROCM) || defined(USE_MUSA)
     (void)enabled;
     m_config.numAttrs = 0;
 #else
@@ -434,7 +446,7 @@ struct LaunchKernel {
   }
 
   auto enable_cluster(dim3 cluster_dim) -> LaunchKernel& {
-#ifdef USE_ROCM
+#if defined(USE_ROCM) || defined(USE_MUSA)
     (void)cluster_dim;
 #else
     auto& attr = m_attrs[m_config.numAttrs++];

@@ -6,8 +6,12 @@
 
 #pragma once
 
+#ifdef USE_MUSA
+#include <sgl_kernel/musa.h>
+#else
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
+#endif
 
 #define FULL_MASK 0xffffffff
 
