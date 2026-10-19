@@ -1,0 +1,74 @@
+name: MUSA SDK 5.3 + MTCC20X
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: SGLang revision to test
+        required: true
+        default: fe244ce161e7d4d09e54504a898129c0a445926b
+        type: string
+
+concurrency:
+  group: musa-sdk53-mtcc20x-${{ inputs.source_ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  jit-compatibility:
+    runs-on: s5000-1-gpu-runner
+    timeout-minutes: 240
+    env:
+      MUSA_SDK53_HOME: ${{ vars.MUSA_SDK53_HOME }}
+      MUSA_MTCC20X_HOME: ${{ vars.MUSA_MTCC20X_HOME }}
+      MTGPU_TARGET: mp_31
+      TORCHADA_ENABLE_CPP_OPS: 1
+      HF_HUB_CACHE: /hf-cache/hub
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+
+      - name: Configure MUSA toolchain
+        run: |
+          test -x "${MUSA_MTCC20X_HOME}/bin/mcc"
+          test -d "${MUSA_MTCC20X_HOME}/include"
+          test -d "${MUSA_SDK53_HOME}/lib"
+
+          composite_root="${RUNNER_TEMP}/musa-sdk53-mtcc20x-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "${composite_root}"
+          ln -s "${MUSA_MTCC20X_HOME}/bin" "${composite_root}/bin"
+          ln -s "${MUSA_MTCC20X_HOME}/include" "${composite_root}/include"
+          ln -s "${MUSA_SDK53_HOME}/lib" "${composite_root}/lib"
+          if [[ -d "${MUSA_SDK53_HOME}/mudnn" ]]; then
+            ln -s "${MUSA_SDK53_HOME}/mudnn" "${composite_root}/mudnn"
+          fi
+
+          {
+            echo "MUSA_HOME=${composite_root}"
+            echo "PYTORCH_MCC=${MUSA_MTCC20X_HOME}/bin/mcc"
+            echo "PATH=${MUSA_MTCC20X_HOME}/bin:${PATH}"
+            echo "LD_LIBRARY_PATH=${MUSA_SDK53_HOME}/lib:${MUSA_SDK53_HOME}/mudnn/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Verify SDK and compiler
+        run: |
+          python3 -c "import torch; print(torch.__version__); print(torch.musa.device_count())"
+          compiler_version="$("$PYTORCH_MCC" --version)"
+          printf '%s\n' "$compiler_version"
+          grep -q 'clang version 20\.' <<< "$compiler_version"
+
+      - name: Install dependencies
+        timeout-minutes: 40
+        run: |
+          bash scripts/ci/musa/musa_install_dependency.sh
+
+      - name: Run MUSA JIT tests
+        timeout-minutes: 60
+        run: |
+          pytest test/registered/unit/kernels/test_jit_cache.py
+          pytest test/registered/kernels/ops/speculative/test_ngram_embedding.py
+          pytest python/sglang/kernels/aot/tests/test_torch_defaults_reset.py
