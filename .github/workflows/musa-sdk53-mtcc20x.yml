@@ -112,7 +112,7 @@ jobs:
             setproctitle \
             starlette \
             tqdm
-          echo "LD_LIBRARY_PATH=${PYTHONUSERBASE}/lib/python3.10/site-packages${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
+          echo "LD_LIBRARY_PATH=${PYTHONUSERBASE}/lib:${PYTHONUSERBASE}/lib/python3.10/site-packages${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
             >> "${GITHUB_ENV}"
 
       - name: Run MUSA JIT tests
