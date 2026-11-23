@@ -328,9 +328,10 @@ jobs:
 
   build-musa52:
     if: |
-      github.repository == 'sgl-project/sglang' &&
+      (github.repository == 'sgl-project/sglang' ||
+       github.repository == 'yingzhou-bjtu/sglang') &&
       (github.event_name == 'push' || github.event.inputs.target == 'all' || github.event.inputs.target == 'musa52')
-    runs-on: kernel-build-node-musa
+    runs-on: ${{ github.repository == 'sgl-project/sglang' && 'kernel-build-node-musa' || 's5000-1-gpu-runner' }}
     strategy:
       matrix:
         python-version: ["3.12"]
@@ -395,6 +396,31 @@ jobs:
           python -m pip install --no-deps --target "${RUNNER_TEMP}/torchada" "torchada==0.1.112"
           echo "PYTHONPATH=${RUNNER_TEMP}/torchada${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
 
+      - name: Record MUSA 5.2 runner stack
+        run: |
+          python - <<'PY'
+          import importlib.metadata
+          import sys
+
+          import torchada  # noqa: F401
+          import torch
+          import torch_musa
+
+          assert sys.version_info[:2] == (3, 12), sys.version
+          assert torch.__version__ == "2.13.0.post1+musa5.2.0", torch.__version__
+          assert torch_musa.__version__ == "2.13.0.post1+musa5.2.0", torch_musa.__version__
+          assert importlib.metadata.version("torchada") == "0.1.112"
+          assert importlib.metadata.version("compressed-tensors") == "0.17.0"
+          assert torch.musa.is_available()
+          print("PYTHON", sys.version)
+          print("TORCH", torch.__version__)
+          print("TORCH_MUSA", torch_musa.__version__)
+          print("TORCHADA", importlib.metadata.version("torchada"))
+          print("COMPRESSED_TENSORS", importlib.metadata.version("compressed-tensors"))
+          print("MUSA_AVAILABLE", torch.musa.is_available())
+          PY
+          mcc --version
+
       - name: Build wheels
         env:
           # The build nodes reach github.com very slowly, so the pinned
@@ -416,8 +442,67 @@ jobs:
           name: wheel-python${{ matrix.python-version }}-musa${{ matrix.musa-version }}
           path: python/sglang/kernels/aot/dist/*
 
+  verify-musa52:
+    needs: build-musa52
+    if: github.repository == 'yingzhou-bjtu/sglang'
+    runs-on: s5000-1-gpu-runner
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: wheel-python3.12-musa52
+          path: python/sglang/kernels/aot/dist/
+
+      - name: Check out whl PR #2
+        uses: actions/checkout@v4
+        with:
+          repository: yingzhou-bjtu/whl
+          ref: review/musa52-index-20261120
+          path: sgl-whl
+
+      - name: Verify chained PR heads
+        run: |
+          git diff --quiet 5e2ecc0ffc06109b368d9b79b3122944e130d4cc -- . \
+            ':(exclude).github/workflows/release-whl-kernel.yml'
+          test "$(git -C sgl-whl rev-parse HEAD)" = "18254a7d46a24c3b7051eda4c87ab2178bbc53b7"
+
+      - name: Run MUSA Python stack tests
+        run: python3 scripts/ci/musa/test_musa_python_stack.py
+
+      - name: Update and verify MUSA 5.2 wheel index
+        run: |
+          python3 scripts/update_kernel_whl_index.py --musa 52
+          wheel=$(find python/sglang/kernels/aot/dist -maxdepth 1 -name '*.whl' -print -quit)
+          test -n "$wheel"
+          grep -F "musa52" sgl-whl/index.html
+          grep -F "$(basename "$wheel")" sgl-whl/musa52/sglang-kernel/index.html
+          grep -F "#sha256=" sgl-whl/musa52/sglang-kernel/index.html
+
+      - name: Install wheel and run MUSA kernel smoke
+        run: |
+          python3 -m pip install --no-deps --target "${RUNNER_TEMP}/torchada" "torchada==0.1.112"
+          wheel=$(find python/sglang/kernels/aot/dist -maxdepth 1 -name '*.whl' -print -quit)
+          python3 -m pip install --no-deps --target "${RUNNER_TEMP}/sgl-wheel" "$wheel"
+          PYTHONPATH="${RUNNER_TEMP}/torchada:${RUNNER_TEMP}/sgl-wheel" python3 - <<'PY'
+          import torchada  # noqa: F401
+          import torch
+          import sgl_kernel
+
+          assert torch.musa.is_available()
+          x = torch.randn((2, 16, 512), dtype=torch.float16, device="musa")
+          expected = x[..., 256:] * torch.nn.functional.silu(x[..., :256])
+          actual = sgl_kernel.silu_and_mul(x)
+          torch.testing.assert_close(actual, expected, rtol=1e-3, atol=1e-3)
+          torch.musa.synchronize()
+          print("MUSA52_E2E_KERNEL_PASS", sgl_kernel.__file__)
+          PY
+
   release-musa52:
     needs: build-musa52
+    if: github.repository == 'sgl-project/sglang'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
