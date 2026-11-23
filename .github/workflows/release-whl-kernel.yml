@@ -4,7 +4,9 @@ on:
   push:
     branches:
       - main
+      - codex/musa52-e2e-20261123
     paths:
+      - .github/workflows/release-whl-kernel.yml
       - python/sglang/kernels/aot/python/sgl_kernel/version.py
   workflow_dispatch:
     inputs:
